@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0
 
-pragma solidity ^0.8.28;
+pragma solidity ^0.8.30;
 
 contract ReputationVanet {
     constructor(address[] memory _owners) {
@@ -20,45 +20,45 @@ contract ReputationVanet {
 
         // Fuzzy Logic
         // describe terms for each variable
-        input.terms[1].mfParams = [0, 0, 200, 400]; // low
-        input.terms[2].mfParams = [300, 500, 700, 900]; // medium
-        input.terms[3].mfParams = [700, 900, 1000, 1000]; // high
+        fuzzyInput.terms[1].mfParams = [0, 0, 400, 500]; // low
+        fuzzyInput.terms[2].mfParams = [400, 600, 700, 900]; // medium
+        fuzzyInput.terms[3].mfParams = [700, 900, 1000, 1000]; // high
 
-        output.terms[1].mfParams = [0, 0, 0, 200]; // very low
-        output.terms[2].mfParams = [0, 200, 200, 400]; // low
-        output.terms[3].mfParams = [300, 500, 500, 700]; // medium
-        output.terms[4].mfParams = [600, 800, 800, 1000]; // high
-        output.terms[5].mfParams = [800, 1000, 1000, 1000]; // very high
+        fuzzyOutput.terms[1].mfParams = [0, 0, 0, 200]; // very low
+        fuzzyOutput.terms[2].mfParams = [0, 200, 200, 400]; // low
+        fuzzyOutput.terms[3].mfParams = [300, 500, 500, 700]; // medium
+        fuzzyOutput.terms[4].mfParams = [600, 800, 800, 1000]; // high
+        fuzzyOutput.terms[5].mfParams = [800, 1000, 1000, 1000]; // very high
 
         // describe system rules
         // It's important to preserve the same order in description
         // as you had when defined inputs
-        rules[0].conditions = [1, 1];
-        rules[0].conclusion = 1; // very low
+        fuzzyRules[0].conditions = [1, 1];
+        fuzzyRules[0].conclusion = 1; // very low
 
-        rules[1].conditions = [1, 2];
-        rules[1].conclusion = 2; // low
+        fuzzyRules[1].conditions = [1, 2];
+        fuzzyRules[1].conclusion = 2; // low
 
-        rules[2].conditions = [1, 3];
-        rules[2].conclusion = 3; // medium
+        fuzzyRules[2].conditions = [1, 3];
+        fuzzyRules[2].conclusion = 3; // medium
 
-        rules[3].conditions = [2, 1];
-        rules[3].conclusion = 2; // low
+        fuzzyRules[3].conditions = [2, 1];
+        fuzzyRules[3].conclusion = 2; // low
 
-        rules[4].conditions = [2, 2];
-        rules[4].conclusion = 3; // medium
+        fuzzyRules[4].conditions = [2, 2];
+        fuzzyRules[4].conclusion = 3; // medium
 
-        rules[5].conditions = [2, 3];
-        rules[5].conclusion = 4; // high
+        fuzzyRules[5].conditions = [2, 3];
+        fuzzyRules[5].conclusion = 4; // high
 
-        rules[6].conditions = [3, 1];
-        rules[6].conclusion = 3; // medium
+        fuzzyRules[6].conditions = [3, 1];
+        fuzzyRules[6].conclusion = 3; // medium
 
-        rules[7].conditions = [3, 2];
-        rules[7].conclusion = 4; // high
+        fuzzyRules[7].conditions = [3, 2];
+        fuzzyRules[7].conclusion = 4; // high
 
-        rules[8].conditions = [3, 3];
-        rules[8].conclusion = 5; // very high
+        fuzzyRules[8].conditions = [3, 3];
+        fuzzyRules[8].conclusion = 5; // very high
     }
 
     struct ownerFunctionTransaction {
@@ -74,7 +74,7 @@ contract ReputationVanet {
         bool preTrust;
         mapping(uint256 => Event) events;
         uint256 eventsLength;
-        mapping(uint256 => bool) eventsIDIndex;
+        mapping(uint256 => uint256) eventsIDIndex;
         uint40 currentReputation;
         bool exist;
     }
@@ -90,16 +90,22 @@ contract ReputationVanet {
         uint256 eventID;
         uint256 eventIndex;
         uint40 eventType;
+        uint40 eventREP;
         uint40 criticalFactor;
         uint256 timestamp; // timestamp of when event is created
-        uint40 eventDuration;
         uint40 msgTrustValue; // trust value for massage accuracy
         uint40 locTrustValue; // trust value for location accuracy
-        uint40 msgTrustWeight; // weight of accumulated feedbacks for message
+        uint40 msgTrustGoodWeight; // weight of accumulated good feedbacks for message
+        uint40 locTrustGoodWeight;
+        uint40 msgTrustBadWeight; // weight of accumulated bad feedbacks for message
+        uint40 locTrustBadWeight;
+        uint40 msgTrustWeight; // weight of accumulated final feedbacks for message
         uint40 locTrustWeight;
-        uint256[2] coordinate;
+        uint256 feedbackCount;
+        int256[2] coordinate;
+        uint8 finish;
         address rsuAddress; // associated RSU address that receive the event
-        mapping(address => EventFeedbackProvider) providers; // list of permit feedback providers
+        mapping(address => EventFeedbackProvider) providers; // list of allocated feedback providers
     }
 
     struct EventFeedbackProvider {
@@ -159,15 +165,16 @@ contract ReputationVanet {
 
     mapping(address => Node) public nodes;
     mapping(address => bool) public rsus;
+    mapping(uint256 => address) internal eventsOwner;
 
-    uint40[5] internal eventTypeDuration = [600, 1800, 3600, 7200, 7200]; // Event duration in seconds for each event type index
+    uint256 internal eventDuration = 3600;
 
     // Value is in scale of 1 = 1000
-    uint40[5] internal eventRepRequirement = [200, 400, 600, 700, 900]; // Reputation value requirement for each event critical level
+    uint40[5] internal eventRepRequirement = [100, 200, 300, 400, 500]; // Reputation value requirement for each event critical level
     //
 
     // Value is in scale of 1 = 100
-    uint40[5] internal eventCriticalLevelFactor = [100, 150, 200, 300, 400]; // Critical level factor to event trust weight for each critical level
+    uint40[5] internal eventCriticalLevelFactor = [1, 2, 3, 4, 5]; // Critical level factor to event trust weight for each critical level
     // Time decay alpha value
     // NOTE: this list is time decay by day with alpha span 2 / 31
     // The value must be changed for different alpha
@@ -242,12 +249,11 @@ contract ReputationVanet {
         1,
         1 // day 68
     ];
-    //
 
     // Fuzzy vairables
-    LinguisticVariable internal input;
-    LinguisticVariable internal output;
-    mapping(uint8 => Rule) internal rules;
+    LinguisticVariable internal fuzzyInput;
+    LinguisticVariable internal fuzzyOutput;
+    mapping(uint8 => Rule) internal fuzzyRules;
 
     // MODIFIERS
     modifier onlySmartContractOwner() {
@@ -261,14 +267,12 @@ contract ReputationVanet {
     }
 
     function submitEvent(
-        uint256 eventID,
         uint40 eventType,
-        uint256[2] memory coordinate,
+        int256[2] memory coordinate,
         address rsuAddress
     ) external onlyNode returns (bool) {
         unchecked {
             Node storage node = nodes[msg.sender];
-            require(!node.eventsIDIndex[eventID], "Event ID already existed");
             require(rsus[rsuAddress], "RSU not exist");
             (uint40 msgNumerator, uint40 locNumerator) = feedbackAggregation(
                 msg.sender
@@ -279,15 +283,28 @@ contract ReputationVanet {
             );
             // can only submit event if reputation pass threshold
             if (node.currentReputation >= eventRepRequirement[eventType]) {
+                uint256 eventID = uint256(
+                    keccak256(
+                        abi.encodePacked(
+                            block.timestamp,
+                            msg.sender,
+                            eventType,
+                            coordinate,
+                            rsuAddress,
+                            node.currentReputation
+                        )
+                    )
+                );
                 Event storage newEvent = node.events[node.eventsLength];
-                node.eventsIDIndex[eventID] = true;
+                node.eventsIDIndex[eventID] = node.eventsLength;
+                eventsOwner[eventID] = msg.sender;
                 newEvent.eventID = eventID;
                 newEvent.eventType = eventType;
+                newEvent.eventREP = node.currentReputation;
                 newEvent.timestamp = block.timestamp; // timestamp of when event is created
                 newEvent.coordinate = coordinate;
                 newEvent.rsuAddress = rsuAddress;
                 newEvent.criticalFactor = eventCriticalLevelFactor[eventType];
-                newEvent.eventDuration = eventTypeDuration[eventType];
                 ++node.eventsLength;
                 return true;
             } else {
@@ -296,44 +313,75 @@ contract ReputationVanet {
         }
     }
 
-    function addTestEvent() external {
-        for (uint8 p; p < 50; ) {
-            Node storage node = nodes[msg.sender];
-            Event storage newEvent = node.events[node.eventsLength];
-            node.exist = true;
-            node.eventsIDIndex[node.eventsLength] = true;
-            newEvent.eventID = node.eventsLength;
-            newEvent.eventType = 1;
-            newEvent.timestamp = block.timestamp; // timestamp of when event is created
-            newEvent.eventDuration = eventTypeDuration[1];
-            newEvent.msgTrustValue = 30;
-            newEvent.locTrustValue = 30;
-            newEvent.msgTrustWeight = 100;
-            newEvent.locTrustWeight = 100;
-            newEvent.criticalFactor = 100;
-            unchecked {
+    // function addTestEvent(uint40 howMany) external {
+    //     unchecked {
+    //         // can only submit event if reputation pass threshold
+    //         for (uint256 p; p < howMany; ) {
+    //             Node storage node = nodes[msg.sender];
+    //             Event storage newEvent = node.events[node.eventsLength];
+    //             uint256 eventID = node.eventsLength;
+    //             node.eventsIDIndex[eventID] = node.eventsLength;
+    //             eventsOwner[eventID] = msg.sender;
+    //             newEvent.eventID = eventID;
+    //             newEvent.eventType = 1;
+    //             newEvent.eventREP = node.currentReputation;
+    //             newEvent.timestamp = block.timestamp; // timestamp of when event is created
+    //             newEvent.criticalFactor = 3;
+    //             newEvent.locTrustGoodWeight = 5000;
+    //             newEvent.locTrustBadWeight = 10000;
+    //             newEvent.msgTrustGoodWeight = 100000;
+    //             newEvent.locTrustWeight = 15000;
+    //             newEvent.msgTrustWeight = 100000;
+    //             newEvent.feedbackCount = 2;
+    //             ++node.eventsLength;
+    //             ++p;
+    //         }
+    //     }
+    // }
+
+    function addTestFinishedEvent(uint40 howMany) external {
+        unchecked {
+            // can only submit event if reputation pass threshold
+            for (uint256 p; p < howMany; ) {
+                Node storage node = nodes[msg.sender];
+                Event storage newEvent = node.events[node.eventsLength];
+                uint256 eventID = node.eventsLength;
+                node.eventsIDIndex[eventID] = node.eventsLength;
+                eventsOwner[eventID] = msg.sender;
+                newEvent.eventID = eventID;
+                newEvent.eventType = 1;
+                newEvent.eventREP = node.currentReputation;
+                newEvent.timestamp = block.timestamp; // timestamp of when event is created
+                newEvent.criticalFactor = 3;
+                newEvent.locTrustValue = 100000;
+                newEvent.msgTrustValue = 100000;
+                newEvent.locTrustWeight = 100000;
+                newEvent.msgTrustWeight = 100000;
+                newEvent.feedbackCount = 1;
+                newEvent.finish = 1;
+                ++node.eventsLength;
                 ++p;
             }
-            ++node.eventsLength;
         }
     }
 
     /*
-     * @dev Give 'providers' the right to send feedback in this process. May only be called by 'owner' and process not ended.
+     * @dev Give 'providers' the right to send feedback in this process. May only be called by event RSU and process not ended.
      * @param address list of feedback providers
      */
     function giveEventFeedbackRight(
         address eventOwnerAddress,
-        uint256 eventIndex,
+        uint256 eventID,
         address[] memory providerList
     ) external {
         unchecked {
-            Event storage thisEvent = nodes[eventOwnerAddress].events[
-                eventIndex
+            Node storage thisNode = nodes[eventOwnerAddress];
+            Event storage thisEvent = thisNode.events[
+                thisNode.eventsIDIndex[eventID]
             ];
+            require(thisEvent.eventID == eventID, "Event not existed");
             require(
-                block.timestamp - thisEvent.timestamp <=
-                    thisEvent.eventDuration,
+                block.timestamp - thisEvent.timestamp < eventDuration,
                 "Event already expired"
             );
             require(
@@ -352,9 +400,9 @@ contract ReputationVanet {
                 );
                 if (nodes[providerList[p]].preTrust) {
                     // pre-trusted node
-                    thisEvent.providers[providerList[p]].weight = 500; // @param change pretrust weight as appropiate
+                    thisEvent.providers[providerList[p]].weight = 500; // @param change pretrust weight as appropriate
                 } else {
-                    thisEvent.providers[providerList[p]].weight = 100; // @param change node weight as appropiate
+                    thisEvent.providers[providerList[p]].weight = 100; // @param change node weight as appropriate
                 }
                 ++p;
             }
@@ -366,43 +414,43 @@ contract ReputationVanet {
      * @param choice index of choice in the choices array
      */
     function giveFeedback(
-        address eventOwnerAddress,
-        uint256 eventIndex,
+        uint256 eventID,
         bool msgTrust,
         bool locTrust
     ) external {
         unchecked {
-            Event storage thisEvent = nodes[eventOwnerAddress].events[
-                eventIndex
+            address eventOwnerAddress = eventsOwner[eventID];
+            Node storage thisNode = nodes[eventOwnerAddress];
+            Event storage thisEvent = thisNode.events[
+                thisNode.eventsIDIndex[eventID]
             ];
             EventFeedbackProvider storage sender = thisEvent.providers[
                 msg.sender
             ];
+            require(thisEvent.eventID == eventID, "Event not existed");
             require(
-                block.timestamp - thisEvent.timestamp <=
-                    thisEvent.eventDuration,
+                block.timestamp - thisEvent.timestamp < eventDuration,
                 "Event already expired"
             );
             require(!sender.sent, "Already sent feedback.");
             sender.sent = true;
             sender.msgFeedback = msgTrust;
             sender.locFeedback = locTrust;
-            uint40 msgPenalty = 100;
-            uint40 locPenalty = 100;
-            uint40 senderWeight = (sender.weight * thisEvent.criticalFactor) /
-                100;
+
+            uint40 senderWeight = sender.weight;
+            thisEvent.msgTrustWeight += senderWeight;
+            thisEvent.locTrustWeight += senderWeight;
             if (msgTrust) {
-                thisEvent.msgTrustValue += senderWeight;
+                thisEvent.msgTrustGoodWeight += senderWeight;
             } else {
-                msgPenalty += 25; // @param change penalty factor as appropiate
+                thisEvent.msgTrustBadWeight += senderWeight;
             }
             if (locTrust) {
-                thisEvent.locTrustValue += senderWeight;
+                thisEvent.locTrustGoodWeight += senderWeight;
             } else {
-                locPenalty += 25; // @param change penalty factor as appropiate
+                thisEvent.locTrustBadWeight += senderWeight;
             }
-            thisEvent.msgTrustWeight += (senderWeight * msgPenalty) / 100;
-            thisEvent.locTrustWeight += (senderWeight * locPenalty) / 100;
+            thisEvent.feedbackCount += 1;
         }
     }
 
@@ -412,34 +460,86 @@ contract ReputationVanet {
      */
 
     function feedbackAggregation(address nodeAddress)
-        public
-        view
+        internal
         returns (uint40 msgNumerator, uint40 locNumerator)
     {
         unchecked {
             uint256 currentTime = block.timestamp;
 
             // add default reputation score at the end with 0.5 score and weight of 100 (10000)
-            msgNumerator = 500000;
-            locNumerator = 500000;
-            uint40 msgDenominator = 10000;
-            uint40 locDenominator = 10000;
+            msgNumerator = 500000; // @param change as appropriate to default rep
+            locNumerator = 500000; // @param change as appropriate to default rep
+            uint40 msgDenominator = 10000; // @param change as appropriate to default rep
+            uint40 locDenominator = 10000; // @param change as appropriate to default rep
+
             Node storage thisNode = nodes[nodeAddress];
             mapping(uint256 => Event) storage eventList = thisNode.events;
             uint256 eventsLength = thisNode.eventsLength;
-            uint40 eventLifeTimeCheck = 500; // @param change event check limit as appropiate
+            uint40 eventLifeTimeCheck = 500; // @param change event check limit as appropriate
             for (uint256 p = eventsLength; p != 0; ) {
                 Event storage thisEvent = eventList[p - 1];
-                uint256 timeDifference = (currentTime - thisEvent.timestamp) /
-                    86400; // difference in days
-                if (timeDifference > 68) {
-                    // @param change event time limit as appropiate, should depend on decay factor
+                uint256 timeDifference = currentTime - thisEvent.timestamp; // difference in seconds
+                uint256 dayDifference = timeDifference / 86400; // difference in days
+                if (dayDifference > 68) {
+                    // @param change event time limit as appropriate, should depend on decay factor
                     break; // stop loop and discard all events onwards that are far too old;
                 }
-                if (thisEvent.msgTrustWeight != 0) {
-                    // event has feedback
-                    // exponetial time decay smooth trust and weight
-                    uint40 timeExpoAlphaDecay = timeDecayList[timeDifference];
+                if (thisEvent.finish == 0 && timeDifference < eventDuration) {
+                    if (thisEvent.feedbackCount > 0) {
+                        uint40 criticalFactor = thisEvent.criticalFactor;
+                        if (
+                            thisEvent.msgTrustBadWeight >
+                            thisEvent.msgTrustGoodWeight
+                        ) {
+                            // bad msg vote
+                            thisEvent.msgTrustWeight =
+                                ((((thisEvent.msgTrustBadWeight * 150) *
+                                    criticalFactor) / 100) *
+                                    thisEvent.msgTrustBadWeight) /
+                                thisEvent.msgTrustWeight;
+                            // @param change penalty factor (default 150) as appropriate
+                            thisEvent.msgTrustValue = 0;
+                        } else {
+                            // good msg vote
+                            thisEvent.msgTrustWeight =
+                                ((thisEvent.msgTrustGoodWeight *
+                                    criticalFactor) *
+                                    thisEvent.msgTrustGoodWeight) /
+                                thisEvent.msgTrustWeight;
+                            thisEvent.msgTrustValue = thisEvent.msgTrustWeight;
+                        }
+                        if (
+                            thisEvent.locTrustBadWeight >
+                            thisEvent.locTrustGoodWeight
+                        ) {
+                            // bad loc vote
+                            thisEvent.locTrustWeight =
+                                ((((thisEvent.locTrustBadWeight * 150) *
+                                    criticalFactor) / 100) *
+                                    thisEvent.locTrustBadWeight) /
+                                thisEvent.locTrustWeight;
+                            // @param change penalty factor (default 150) as appropriate
+                            thisEvent.locTrustValue = 0;
+                        } else {
+                            // good loc vote
+                            thisEvent.locTrustWeight =
+                                ((thisEvent.locTrustGoodWeight *
+                                    criticalFactor) *
+                                    thisEvent.locTrustGoodWeight) /
+                                thisEvent.locTrustWeight;
+                            thisEvent.locTrustValue = thisEvent.locTrustWeight;
+                        }
+                        thisEvent.finish = 1; // closed event
+                    } else {
+                        thisEvent.finish = 2; // event has no feedback
+                    }
+                }
+
+                if (thisEvent.finish == 1) {
+                    // event has feedback and finish closing
+                    // exponential time decay smooth trust and weight
+
+                    uint40 timeExpoAlphaDecay = timeDecayList[dayDifference];
                     msgNumerator +=
                         (timeExpoAlphaDecay * thisEvent.msgTrustValue) /
                         100;
@@ -461,8 +561,8 @@ contract ReputationVanet {
                 --p;
             }
             // find weighted average and convert value to fuzzy function scale where 1 = 1000
-            msgNumerator = (msgNumerator * 1000) / msgDenominator;
-            locNumerator = (locNumerator * 1000) / locDenominator;
+            msgNumerator = (msgNumerator * 10) / msgDenominator;
+            locNumerator = (locNumerator * 10) / locDenominator;
         }
     }
 
@@ -537,23 +637,23 @@ contract ReputationVanet {
             for (uint8 i; i < 9; ) {
                 // for each Rule get values at the right parts
                 uint40 min = 1000;
-                Rule memory thisRule = rules[i];
+                Rule memory thisRule = fuzzyRules[i];
                 uint40 checkValue = valueAtTerm(
-                    input.terms[thisRule.conditions[0]].mfParams,
+                    fuzzyInput.terms[thisRule.conditions[0]].mfParams,
                     inputValue1
                 );
                 if (checkValue < min) {
                     min = checkValue;
                 }
                 checkValue = valueAtTerm(
-                    input.terms[thisRule.conditions[1]].mfParams,
+                    fuzzyInput.terms[thisRule.conditions[1]].mfParams,
                     inputValue2
                 );
                 if (checkValue < min) {
                     min = checkValue;
                 }
                 union[i] = CorrectedTerm(
-                    output.terms[thisRule.conclusion].mfParams,
+                    fuzzyOutput.terms[thisRule.conclusion].mfParams,
                     min
                 );
                 ++i;
@@ -591,8 +691,10 @@ contract ReputationVanet {
             uint256 locTrustValue,
             uint256 msgTrustWeight,
             uint256 locTrustWeight,
-            uint256[2] memory coordinate,
-            address rsuAddress
+            int256[2] memory coordinate,
+            address rsuAddress,
+            uint8 finish,
+            uint256 voteTimeRemain
         )
     {
         Event storage thisEvent = nodes[eventOwnerAddress].events[eventIndex];
@@ -606,6 +708,8 @@ contract ReputationVanet {
         locTrustWeight = thisEvent.locTrustWeight;
         coordinate = thisEvent.coordinate;
         rsuAddress = thisEvent.rsuAddress;
+        finish = thisEvent.finish;
+        voteTimeRemain = block.timestamp - thisEvent.timestamp;
     }
 
     /*
@@ -711,7 +815,7 @@ contract ReputationVanet {
                     if (!nodes[addressList[p]].exist) {
                         // Already existed nodes will not be added again
                         nodes[addressList[p]].preTrust = pretrust;
-                        nodes[addressList[p]].currentReputation = 500; // @param change default rep value as appropiate
+                        nodes[addressList[p]].currentReputation = 500; // @param change default rep value as appropriate
                         nodes[addressList[p]].exist = true;
                     }
                 }
@@ -770,7 +874,7 @@ contract ReputationVanet {
     function removeOwners(address[] memory addressList) internal {
         require(
             ownerCount - addressList.length >= requiredOwnersConfirmation,
-            "Owners lower than requirment"
+            "Owners lower than requirement"
         );
         for (uint256 p; p < addressList.length; ) {
             delete owners[addressList[p]];
