@@ -339,31 +339,31 @@ contract ReputationVanet {
     //     }
     // }
 
-    function addTestFinishedEvent(uint40 howMany) external {
-        unchecked {
-            // can only submit event if reputation pass threshold
-            for (uint256 p; p < howMany; ) {
-                Node storage node = nodes[msg.sender];
-                Event storage newEvent = node.events[node.eventsLength];
-                uint256 eventID = node.eventsLength;
-                node.eventsIDIndex[eventID] = node.eventsLength;
-                eventsOwner[eventID] = msg.sender;
-                newEvent.eventID = eventID;
-                newEvent.eventType = 1;
-                newEvent.eventREP = node.currentReputation;
-                newEvent.timestamp = block.timestamp; // timestamp of when event is created
-                newEvent.criticalFactor = 3;
-                newEvent.locTrustValue = 100000;
-                newEvent.msgTrustValue = 100000;
-                newEvent.locTrustWeight = 100000;
-                newEvent.msgTrustWeight = 100000;
-                newEvent.feedbackCount = 1;
-                newEvent.finish = 1;
-                ++node.eventsLength;
-                ++p;
-            }
-        }
-    }
+    // function addTestFinishedEvent(uint40 howMany) external {
+    //     unchecked {
+    //         // can only submit event if reputation pass threshold
+    //         for (uint256 p; p < howMany; ) {
+    //             Node storage node = nodes[msg.sender];
+    //             Event storage newEvent = node.events[node.eventsLength];
+    //             uint256 eventID = node.eventsLength;
+    //             node.eventsIDIndex[eventID] = node.eventsLength;
+    //             eventsOwner[eventID] = msg.sender;
+    //             newEvent.eventID = eventID;
+    //             newEvent.eventType = 1;
+    //             newEvent.eventREP = node.currentReputation;
+    //             newEvent.timestamp = block.timestamp; // timestamp of when event is created
+    //             newEvent.criticalFactor = 3;
+    //             newEvent.locTrustValue = 1000;
+    //             newEvent.msgTrustValue = 1000;
+    //             newEvent.locTrustWeight = 1000;
+    //             newEvent.msgTrustWeight = 1000;
+    //             newEvent.feedbackCount = 1;
+    //             newEvent.finish = 1;
+    //             ++node.eventsLength;
+    //             ++p;
+    //         }
+    //     }
+    // }
 
     /*
      * @dev Give 'providers' the right to send feedback in this process. May only be called by event RSU and process not ended.
@@ -400,7 +400,7 @@ contract ReputationVanet {
                 );
                 if (nodes[providerList[p]].preTrust) {
                     // pre-trusted node
-                    thisEvent.providers[providerList[p]].weight = 500; // @param change pretrust weight as appropriate
+                    thisEvent.providers[providerList[p]].weight = 500; // @param change pre-trusted weight as appropriate
                 } else {
                     thisEvent.providers[providerList[p]].weight = 100; // @param change node weight as appropriate
                 }
@@ -467,8 +467,8 @@ contract ReputationVanet {
             uint256 currentTime = block.timestamp;
 
             // add default reputation score at the end with 0.5 score and weight of 100 (10000)
-            msgNumerator = 500000; // @param change as appropriate to default rep
-            locNumerator = 500000; // @param change as appropriate to default rep
+            msgNumerator = 5000; // @param change as appropriate to default rep
+            locNumerator = 5000; // @param change as appropriate to default rep
             uint40 msgDenominator = 10000; // @param change as appropriate to default rep
             uint40 locDenominator = 10000; // @param change as appropriate to default rep
 
@@ -561,8 +561,8 @@ contract ReputationVanet {
                 --p;
             }
             // find weighted average and convert value to fuzzy function scale where 1 = 1000
-            msgNumerator = (msgNumerator * 10) / msgDenominator;
-            locNumerator = (locNumerator * 10) / locDenominator;
+            msgNumerator = (msgNumerator * 1000) / msgDenominator;
+            locNumerator = (locNumerator * 1000) / locDenominator;
         }
     }
 
@@ -693,8 +693,7 @@ contract ReputationVanet {
             uint256 locTrustWeight,
             int256[2] memory coordinate,
             address rsuAddress,
-            uint8 finish,
-            uint256 voteTimeRemain
+            uint8 finish
         )
     {
         Event storage thisEvent = nodes[eventOwnerAddress].events[eventIndex];
@@ -709,7 +708,6 @@ contract ReputationVanet {
         coordinate = thisEvent.coordinate;
         rsuAddress = thisEvent.rsuAddress;
         finish = thisEvent.finish;
-        voteTimeRemain = block.timestamp - thisEvent.timestamp;
     }
 
     /*
