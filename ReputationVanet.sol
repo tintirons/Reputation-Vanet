@@ -93,14 +93,15 @@ contract ReputationVanet {
         uint40 eventREP;
         uint40 criticalFactor;
         uint256 timestamp; // timestamp of when event is created
-        uint40 msgTrustValue; // trust value for massage accuracy
-        uint40 locTrustValue; // trust value for location accuracy
+        bool msgTrustResult; // 0 is negative 1 is positive
+        bool locTrustResult;
         uint40 msgTrustGoodWeight; // weight of accumulated good feedbacks for message
         uint40 locTrustGoodWeight;
         uint40 msgTrustBadWeight; // weight of accumulated bad feedbacks for message
         uint40 locTrustBadWeight;
         uint40 msgTrustWeight; // weight of accumulated final feedbacks for message
         uint40 locTrustWeight;
+        uint40 penalty;
         uint256 feedbackCount;
         int256[2] coordinate;
         uint8 finish;
@@ -168,6 +169,7 @@ contract ReputationVanet {
     mapping(uint256 => address) internal eventsOwner;
 
     uint256 internal eventDuration = 3600;
+    uint40 internal penaltyRate = 250; // in scale where 0.01 is 100
 
     // Value is in scale of 1 = 1000
     uint40[5] internal eventRepRequirement = [100, 200, 300, 400, 500]; // Reputation value requirement for each event critical level
@@ -313,31 +315,31 @@ contract ReputationVanet {
         }
     }
 
-    // function addTestEvent(uint40 howMany) external {
-    //     unchecked {
-    //         // can only submit event if reputation pass threshold
-    //         for (uint256 p; p < howMany; ) {
-    //             Node storage node = nodes[msg.sender];
-    //             Event storage newEvent = node.events[node.eventsLength];
-    //             uint256 eventID = node.eventsLength;
-    //             node.eventsIDIndex[eventID] = node.eventsLength;
-    //             eventsOwner[eventID] = msg.sender;
-    //             newEvent.eventID = eventID;
-    //             newEvent.eventType = 1;
-    //             newEvent.eventREP = node.currentReputation;
-    //             newEvent.timestamp = block.timestamp; // timestamp of when event is created
-    //             newEvent.criticalFactor = 3;
-    //             newEvent.locTrustGoodWeight = 5000;
-    //             newEvent.locTrustBadWeight = 10000;
-    //             newEvent.msgTrustGoodWeight = 100000;
-    //             newEvent.locTrustWeight = 15000;
-    //             newEvent.msgTrustWeight = 100000;
-    //             newEvent.feedbackCount = 2;
-    //             ++node.eventsLength;
-    //             ++p;
-    //         }
-    //     }
-    // }
+    function addTestEvent(uint40 howMany) external {
+        unchecked {
+            // can only submit event if reputation pass threshold
+            for (uint256 p; p < howMany; ) {
+                Node storage node = nodes[msg.sender];
+                Event storage newEvent = node.events[node.eventsLength];
+                uint256 eventID = node.eventsLength;
+                node.eventsIDIndex[eventID] = node.eventsLength;
+                eventsOwner[eventID] = msg.sender;
+                newEvent.eventID = eventID;
+                newEvent.eventType = 1;
+                newEvent.eventREP = node.currentReputation;
+                newEvent.timestamp = block.timestamp; // timestamp of when event is created
+                newEvent.criticalFactor = 3;
+                newEvent.locTrustGoodWeight = 5000;
+                newEvent.locTrustBadWeight = 10000;
+                newEvent.msgTrustGoodWeight = 100000;
+                newEvent.locTrustWeight = 15000;
+                newEvent.msgTrustWeight = 100000;
+                newEvent.feedbackCount = 2;
+                ++node.eventsLength;
+                ++p;
+            }
+        }
+    }
 
     // function addTestFinishedEvent(uint40 howMany) external {
     //     unchecked {
@@ -353,10 +355,10 @@ contract ReputationVanet {
     //             newEvent.eventREP = node.currentReputation;
     //             newEvent.timestamp = block.timestamp; // timestamp of when event is created
     //             newEvent.criticalFactor = 3;
-    //             newEvent.locTrustValue = 1000;
-    //             newEvent.msgTrustValue = 1000;
-    //             newEvent.locTrustWeight = 1000;
-    //             newEvent.msgTrustWeight = 1000;
+    //             newEvent.locTrustResult = true;
+    //             // newEvent.msgTrustResult = true;
+    //             newEvent.locTrustWeight = 100000;
+    //             newEvent.msgTrustWeight = 100000;
     //             newEvent.feedbackCount = 1;
     //             newEvent.finish = 1;
     //             ++node.eventsLength;
@@ -400,7 +402,7 @@ contract ReputationVanet {
                 );
                 if (nodes[providerList[p]].preTrust) {
                     // pre-trusted node
-                    thisEvent.providers[providerList[p]].weight = 500; // @param change pre-trusted weight as appropriate
+                    thisEvent.providers[providerList[p]].weight = 500; // @param change pretrust weight as appropriate
                 } else {
                     thisEvent.providers[providerList[p]].weight = 100; // @param change node weight as appropriate
                 }
@@ -438,8 +440,6 @@ contract ReputationVanet {
             sender.locFeedback = locTrust;
 
             uint40 senderWeight = sender.weight;
-            thisEvent.msgTrustWeight += senderWeight;
-            thisEvent.locTrustWeight += senderWeight;
             if (msgTrust) {
                 thisEvent.msgTrustGoodWeight += senderWeight;
             } else {
@@ -467,8 +467,8 @@ contract ReputationVanet {
             uint256 currentTime = block.timestamp;
 
             // add default reputation score at the end with 0.5 score and weight of 100 (10000)
-            msgNumerator = 5000; // @param change as appropriate to default rep
-            locNumerator = 5000; // @param change as appropriate to default rep
+            msgNumerator = 500000; // @param change as appropriate to default rep
+            locNumerator = 500000; // @param change as appropriate to default rep
             uint40 msgDenominator = 10000; // @param change as appropriate to default rep
             uint40 locDenominator = 10000; // @param change as appropriate to default rep
 
@@ -476,6 +476,7 @@ contract ReputationVanet {
             mapping(uint256 => Event) storage eventList = thisNode.events;
             uint256 eventsLength = thisNode.eventsLength;
             uint40 eventLifeTimeCheck = 500; // @param change event check limit as appropriate
+            uint40 totalPenalty = 10000;
             for (uint256 p = eventsLength; p != 0; ) {
                 Event storage thisEvent = eventList[p - 1];
                 uint256 timeDifference = currentTime - thisEvent.timestamp; // difference in seconds
@@ -486,48 +487,30 @@ contract ReputationVanet {
                 }
                 if (thisEvent.finish == 0 && timeDifference < eventDuration) {
                     if (thisEvent.feedbackCount > 0) {
-                        uint40 criticalFactor = thisEvent.criticalFactor;
                         if (
-                            thisEvent.msgTrustBadWeight >
-                            thisEvent.msgTrustGoodWeight
+                            thisEvent.msgTrustGoodWeight > thisEvent.msgTrustBadWeight
                         ) {
-                            // bad msg vote
-                            thisEvent.msgTrustWeight =
-                                ((((thisEvent.msgTrustBadWeight * 150) *
-                                    criticalFactor) / 100) *
-                                    thisEvent.msgTrustBadWeight) /
-                                thisEvent.msgTrustWeight;
-                            // @param change penalty factor (default 150) as appropriate
-                            thisEvent.msgTrustValue = 0;
+                            // majority good msg vote
+                            thisEvent.msgTrustWeight = thisEvent.msgTrustGoodWeight * thisEvent.criticalFactor;
+                            thisEvent.msgTrustResult = true;
                         } else {
-                            // good msg vote
-                            thisEvent.msgTrustWeight =
-                                ((thisEvent.msgTrustGoodWeight *
-                                    criticalFactor) *
-                                    thisEvent.msgTrustGoodWeight) /
-                                thisEvent.msgTrustWeight;
-                            thisEvent.msgTrustValue = thisEvent.msgTrustWeight;
+                            // majority bad msg vote
+                            thisEvent.msgTrustWeight = thisEvent.msgTrustBadWeight * thisEvent.criticalFactor;
+                            // add confidence penalty factor
+                            thisEvent.penalty += (penaltyRate * (thisEvent.msgTrustBadWeight - thisEvent.msgTrustGoodWeight)) / thisEvent.msgTrustBadWeight;
                         }
                         if (
-                            thisEvent.locTrustBadWeight >
-                            thisEvent.locTrustGoodWeight
+                            thisEvent.locTrustGoodWeight >
+                            thisEvent.locTrustBadWeight
                         ) {
-                            // bad loc vote
-                            thisEvent.locTrustWeight =
-                                ((((thisEvent.locTrustBadWeight * 150) *
-                                    criticalFactor) / 100) *
-                                    thisEvent.locTrustBadWeight) /
-                                thisEvent.locTrustWeight;
-                            // @param change penalty factor (default 150) as appropriate
-                            thisEvent.locTrustValue = 0;
+                            // majority good loc vote
+                            thisEvent.locTrustWeight = thisEvent.locTrustGoodWeight * thisEvent.criticalFactor;
+                            thisEvent.locTrustResult = true;
                         } else {
-                            // good loc vote
-                            thisEvent.locTrustWeight =
-                                ((thisEvent.locTrustGoodWeight *
-                                    criticalFactor) *
-                                    thisEvent.locTrustGoodWeight) /
-                                thisEvent.locTrustWeight;
-                            thisEvent.locTrustValue = thisEvent.locTrustWeight;
+                            // majority bad loc vote
+                            thisEvent.locTrustWeight = thisEvent.locTrustBadWeight * thisEvent.criticalFactor;
+                            // add confidence penalty factor
+                            thisEvent.penalty += (penaltyRate * (thisEvent.locTrustBadWeight - thisEvent.locTrustGoodWeight)) / thisEvent.locTrustBadWeight;
                         }
                         thisEvent.finish = 1; // closed event
                     } else {
@@ -539,19 +522,25 @@ contract ReputationVanet {
                     // event has feedback and finish closing
                     // exponential time decay smooth trust and weight
 
-                    uint40 timeExpoAlphaDecay = timeDecayList[dayDifference];
-                    msgNumerator +=
-                        (timeExpoAlphaDecay * thisEvent.msgTrustValue) /
-                        100;
-                    locNumerator +=
-                        (timeExpoAlphaDecay * thisEvent.locTrustValue) /
-                        100;
-                    msgDenominator +=
-                        (timeExpoAlphaDecay * thisEvent.msgTrustWeight) /
-                        100;
-                    locDenominator +=
-                        (timeExpoAlphaDecay * thisEvent.locTrustWeight) /
-                        100;
+                    totalPenalty += thisEvent.penalty;
+                    if (thisEvent.msgTrustResult = false){
+                        // bad msg trust
+                        msgDenominator += (timeDecayList[dayDifference] * thisEvent.msgTrustWeight * totalPenalty) / 1000000;
+                    } else {
+                        // good msg trust
+                        uint40 msgWeight = (timeDecayList[dayDifference] * thisEvent.msgTrustWeight) / 100;
+                        msgDenominator += msgWeight ;
+                        msgNumerator += msgWeight;
+                    }
+                    if (thisEvent.locTrustResult = false){
+                        // bad msg trust
+                        msgDenominator += (timeDecayList[dayDifference] * thisEvent.locTrustWeight * totalPenalty) / 1000000;
+                    } else {
+                        // good msg trust
+                        uint40 locWeight = (timeDecayList[dayDifference] * thisEvent.locTrustWeight) / 100;
+                        msgDenominator += locWeight ;
+                        msgNumerator += locWeight;
+                    }
 
                     --eventLifeTimeCheck; // only count event with feedback for lifetime check
                     if (eventLifeTimeCheck == 0) {
@@ -561,8 +550,8 @@ contract ReputationVanet {
                 --p;
             }
             // find weighted average and convert value to fuzzy function scale where 1 = 1000
-            msgNumerator = (msgNumerator * 1000) / msgDenominator;
-            locNumerator = (locNumerator * 1000) / locDenominator;
+            msgNumerator = (msgNumerator * 10) / msgDenominator;
+            locNumerator = (locNumerator * 10) / locDenominator;
         }
     }
 
@@ -687,27 +676,28 @@ contract ReputationVanet {
             uint256 eventID,
             uint40 eventType,
             uint256 timestamp,
-            uint256 msgTrustValue,
-            uint256 locTrustValue,
-            uint256 msgTrustWeight,
-            uint256 locTrustWeight,
+            bool msgTrustResult,
+            bool locTrustResult,
+            uint40 msgTrustWeight,
+            uint40 locTrustWeight,
             int256[2] memory coordinate,
             address rsuAddress,
-            uint8 finish
+            uint8 finish,
+            uint256 voteTimeRemain
         )
     {
         Event storage thisEvent = nodes[eventOwnerAddress].events[eventIndex];
         eventID = thisEvent.eventID;
-        eventIndex = thisEvent.eventIndex;
         eventType = thisEvent.eventType;
         timestamp = thisEvent.timestamp;
-        msgTrustValue = thisEvent.msgTrustValue;
-        locTrustValue = thisEvent.locTrustValue;
+        msgTrustResult = thisEvent.msgTrustResult;
+        locTrustResult = thisEvent.locTrustResult;
         msgTrustWeight = thisEvent.msgTrustWeight;
         locTrustWeight = thisEvent.locTrustWeight;
         coordinate = thisEvent.coordinate;
         rsuAddress = thisEvent.rsuAddress;
         finish = thisEvent.finish;
+        voteTimeRemain = block.timestamp - thisEvent.timestamp;
     }
 
     /*
