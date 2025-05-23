@@ -9,7 +9,7 @@ contract ReputationVanet {
             ownersLength >= requiredOwnersConfirmation,
             "Input less than requirement"
         );
-        for (uint256 i; i < ownersLength; ) {
+        for (uint256 i; i < ownersLength;) {
             // require(owner != address(0), "invalid owner");
             owners[_owners[i]] = true;
             unchecked {
@@ -181,75 +181,75 @@ contract ReputationVanet {
     // NOTE: this list is time decay by day with alpha span 2 / 31
     // The value must be changed for different alpha
     uint40[69] internal timeDecayList = [
-        100, // day 0
-        93,
-        87,
-        81,
-        76,
-        71,
-        66,
-        62,
-        58,
-        54,
-        51,
-        47,
-        44,
-        41,
-        39,
-        36,
-        34,
-        31,
-        29,
-        27,
-        26,
-        24,
-        22,
-        21,
-        19,
-        18,
-        17,
-        16,
-        15,
-        14,
-        13,
-        12,
-        11,
-        10,
-        10,
-        9,
-        8,
-        8,
-        7,
-        7,
-        6,
-        6,
-        5,
-        5,
-        5,
-        4,
-        4,
-        4,
-        3,
-        3,
-        3,
-        3,
-        3,
-        2,
-        2,
-        2,
-        2,
-        2,
-        2,
-        1,
-        1,
-        1,
-        1,
-        1,
-        1,
-        1,
-        1,
-        1,
-        1 // day 68
+    100, // day 0
+    93,
+    87,
+    81,
+    76,
+    71,
+    66,
+    62,
+    58,
+    54,
+    51,
+    47,
+    44,
+    41,
+    39,
+    36,
+    34,
+    31,
+    29,
+    27,
+    26,
+    24,
+    22,
+    21,
+    19,
+    18,
+    17,
+    16,
+    15,
+    14,
+    13,
+    12,
+    11,
+    10,
+    10,
+    9,
+    8,
+    8,
+    7,
+    7,
+    6,
+    6,
+    5,
+    5,
+    5,
+    4,
+    4,
+    4,
+    3,
+    3,
+    3,
+    3,
+    3,
+    2,
+    2,
+    2,
+    2,
+    2,
+    2,
+    1,
+    1,
+    1,
+    1,
+    1,
+    1,
+    1,
+    1,
+    1,
+    1 // day 68
     ];
 
     // Fuzzy vairables
@@ -276,14 +276,14 @@ contract ReputationVanet {
         unchecked {
             Node storage node = nodes[msg.sender];
             require(rsus[rsuAddress], "RSU not exist");
-            (uint40 msgNumerator, uint40 locNumerator, uint40 totalPenalty) = feedbackAggregation(
+            (uint40 msgNumerator, uint40 locNumerator) = feedbackAggregation(
                 msg.sender
             );
             node.currentReputation = currentReputation(
                 msgNumerator,
                 locNumerator
             );
-            // can only submit event if reputation pass threshold
+        // can only submit event if reputation pass threshold
             if (node.currentReputation >= eventRepRequirement[eventType]) {
                 uint256 eventID = uint256(
                     keccak256(
@@ -380,8 +380,8 @@ contract ReputationVanet {
         unchecked {
             Node storage thisNode = nodes[eventOwnerAddress];
             Event storage thisEvent = thisNode.events[
-                thisNode.eventsIDIndex[eventID]
-            ];
+                                thisNode.eventsIDIndex[eventID]
+                ];
             require(thisEvent.eventID == eventID, "Event not existed");
             require(
                 block.timestamp - thisEvent.timestamp < eventDuration,
@@ -392,7 +392,7 @@ contract ReputationVanet {
                 "You are not event's RSU"
             );
             uint256 providerListLength = providerList.length;
-            for (uint256 p; p < providerListLength; ) {
+            for (uint256 p; p < providerListLength;) {
                 require(
                     eventOwnerAddress != providerList[p],
                     "Can not give right to event owner."
@@ -425,11 +425,11 @@ contract ReputationVanet {
             address eventOwnerAddress = eventsOwner[eventID];
             Node storage thisNode = nodes[eventOwnerAddress];
             Event storage thisEvent = thisNode.events[
-                thisNode.eventsIDIndex[eventID]
-            ];
+                                thisNode.eventsIDIndex[eventID]
+                ];
             EventFeedbackProvider storage sender = thisEvent.providers[
-                msg.sender
-            ];
+                            msg.sender
+                ];
             require(thisEvent.eventID == eventID, "Event not existed");
             require(
                 block.timestamp - thisEvent.timestamp < eventDuration,
@@ -461,13 +461,13 @@ contract ReputationVanet {
      */
 
     function feedbackAggregation(address nodeAddress)
-        internal
-        returns (uint40 msgNumerator, uint40 locNumerator, uint40 totalPenalty)
+    internal
+    returns (uint40 msgNumerator, uint40 locNumerator)
     {
         unchecked {
             uint256 currentTime = block.timestamp;
 
-            // add default reputation score at the end with 0.5 score and weight of 100 (10000)
+        // add default reputation score at the end with 0.5 score and weight of 100 (10000)
             msgNumerator = 5000; // @param change as appropriate to default rep
             locNumerator = 5000; // @param change as appropriate to default rep
             uint40 msgDenominator = 10000; // @param change as appropriate to default rep
@@ -477,8 +477,8 @@ contract ReputationVanet {
             mapping(uint256 => Event) storage eventList = thisNode.events;
             uint256 eventsLength = thisNode.eventsLength;
             uint40 eventLifeTimeCheck = 500; // @param change event check limit as appropriate
-            totalPenalty = 10000;
-            for (uint256 p = eventsLength; p != 0; ) {
+            uint40 totalPenalty = 10000;
+            for (uint256 p = eventsLength; p != 0;) {
                 Event storage thisEvent = eventList[p - 1];
                 uint256 timeDifference = currentTime - thisEvent.timestamp; // difference in seconds
                 uint256 dayDifference = timeDifference / 86400; // difference in days
@@ -545,7 +545,7 @@ contract ReputationVanet {
                         // bad msg trust
                         msgDenominator +=
                             (timeDecayList[dayDifference] *
-                                thisEvent.msgTrustWeight *
+                            thisEvent.msgTrustWeight *
                                 totalPenalty) /
                             1000000;
                     } else {
@@ -559,7 +559,7 @@ contract ReputationVanet {
                         // bad msg trust
                         locDenominator +=
                             (timeDecayList[dayDifference] *
-                                thisEvent.locTrustWeight *
+                            thisEvent.locTrustWeight *
                                 totalPenalty) /
                             1000000;
                     } else {
@@ -577,21 +577,21 @@ contract ReputationVanet {
                 }
                 --p;
             }
-            // find weighted average and convert value to fuzzy function scale where 1 = 1000
+        // find weighted average and convert value to fuzzy function scale where 1 = 1000
             msgNumerator = (msgNumerator * 1000) / msgDenominator;
             locNumerator = (locNumerator * 1000) / locDenominator;
         }
     }
 
     function valueAtUnionOfTerms(CorrectedTerm[9] memory union, uint40 x)
-        internal
-        pure
-        returns (
-            uint40 max // max value from all Terms
-        )
+    internal
+    pure
+    returns (
+        uint40 max // max value from all Terms
+    )
     {
         unchecked {
-            for (uint8 p; p < 9; ) {
+            for (uint8 p; p < 9;) {
                 CorrectedTerm memory term = union[p];
                 uint40 check;
                 uint40 belief = term.beliefDegree;
@@ -611,9 +611,9 @@ contract ReputationVanet {
     }
 
     function valueAtTerm(uint40[4] memory mfParams, uint40 x)
-        internal
-        pure
-        returns (uint40)
+    internal
+    pure
+    returns (uint40)
     {
         /**
          * Trapezoidal membership function.
@@ -645,13 +645,13 @@ contract ReputationVanet {
      * @param message and location trust score
      */
     function currentReputation(uint40 inputValue1, uint40 inputValue2)
-        internal
-        view
-        returns (uint40 result)
+    internal
+    view
+    returns (uint40 result)
     {
         unchecked {
             CorrectedTerm[9] memory union;
-            for (uint8 i; i < 9; ) {
+            for (uint8 i; i < 9;) {
                 // for each Rule get values at the right parts
                 uint40 min = 1000;
                 Rule memory thisRule = fuzzyRules[i];
@@ -676,7 +676,7 @@ contract ReputationVanet {
                 ++i;
             }
 
-            // Get mass center
+        // Get mass center
             uint40 s;
             while (result < 1000) {
                 result += 10;
@@ -689,7 +689,7 @@ contract ReputationVanet {
                 result += 10;
                 newS += (10 * valueAtUnionOfTerms(union, result));
             }
-            // now it equals to 'mass center'. In prev point S < S/2, in next point  S > S/2
+        // now it equals to 'mass center'. In prev point S < S/2, in next point  S > S/2
         }
     }
 
@@ -698,21 +698,21 @@ contract ReputationVanet {
      * @param choice index of choice in the choices array
      */
     function checkEvent(address eventOwnerAddress, uint256 eventIndex)
-        external
-        view
-        returns (
-            uint256 eventID,
-            uint40 eventType,
-            uint256 timestamp,
-            bool msgTrustResult,
-            bool locTrustResult,
-            uint40 msgTrustWeight,
-            uint40 locTrustWeight,
-            int256[2] memory coordinate,
-            address rsuAddress,
-            uint8 finish,
-            uint256 voteTimeRemain
-        )
+    external
+    view
+    returns (
+        uint256 eventID,
+        uint40 eventType,
+        uint256 timestamp,
+        bool msgTrustResult,
+        bool locTrustResult,
+        uint40 msgTrustWeight,
+        uint40 locTrustWeight,
+        int256[2] memory coordinate,
+        address rsuAddress,
+        uint8 finish,
+        uint256 voteTimeRemain
+    )
     {
         Event storage thisEvent = nodes[eventOwnerAddress].events[eventIndex];
         eventID = thisEvent.eventID;
@@ -740,8 +740,8 @@ contract ReputationVanet {
         require(functionID < 8, "functionID not exist");
         require(addressList.length != 0, "require address input");
         ownerFunctionTransaction storage thisTX = ownerTransactions[
-            ownerTransactionCount
-        ];
+                    ownerTransactionCount
+            ];
         thisTX.functionID = functionID;
         thisTX.sender = msg.sender;
         thisTX.addressList = addressList;
@@ -750,12 +750,12 @@ contract ReputationVanet {
     }
 
     function confirmOwnerTransaction(uint256 transactionId)
-        public
-        onlySmartContractOwner
+    public
+    onlySmartContractOwner
     {
         ownerFunctionTransaction storage thisTX = ownerTransactions[
-            transactionId
-        ];
+                    transactionId
+            ];
         require(!thisTX.executed, "TX already executed");
         require(thisTX.addressList.length != 0, "Event not exist");
         require(!thisTX.confirmList[msg.sender], "You already confirmed");
@@ -767,8 +767,8 @@ contract ReputationVanet {
     }
 
     function deleteOwnerTransaction(uint256 txIndex)
-        external
-        onlySmartContractOwner
+    external
+    onlySmartContractOwner
     {
         ownerFunctionTransaction storage thisTX = ownerTransactions[txIndex];
         require(thisTX.addressList.length != 0, "TX not exist");
@@ -779,8 +779,8 @@ contract ReputationVanet {
     function executeTransaction(uint256 transactionId) internal {
         unchecked {
             ownerFunctionTransaction storage thisTX = ownerTransactions[
-                transactionId
-            ];
+                        transactionId
+                ];
 
             uint40 functionID = thisTX.functionID;
             if (functionID == 0) {
@@ -823,7 +823,7 @@ contract ReputationVanet {
         bool pretrust,
         bool rsu
     ) internal {
-        for (uint256 p; p < addressList.length; ) {
+        for (uint256 p; p < addressList.length;) {
             unchecked {
                 if (rsu) {
                     rsus[addressList[p]] = true;
@@ -845,7 +845,7 @@ contract ReputationVanet {
      * @param address list of nodes
      */
     function removeNodes(address[] memory addressList, bool rsu) internal {
-        for (uint256 p; p < addressList.length; ) {
+        for (uint256 p; p < addressList.length;) {
             if (rsu) {
                 delete rsus[addressList[p]];
             } else {
@@ -872,7 +872,7 @@ contract ReputationVanet {
      * @param address list
      */
     function addOwners(address[] memory addressList) internal {
-        for (uint256 p; p < addressList.length; ) {
+        for (uint256 p; p < addressList.length;) {
             unchecked {
                 if (!owners[addressList[p]]) {
                     owners[addressList[p]] = true;
@@ -892,7 +892,7 @@ contract ReputationVanet {
             ownerCount - addressList.length >= requiredOwnersConfirmation,
             "Owners lower than requirement"
         );
-        for (uint256 p; p < addressList.length; ) {
+        for (uint256 p; p < addressList.length;) {
             delete owners[addressList[p]];
             unchecked {
                 ++p;
